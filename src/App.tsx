@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import {
+  AlertCircle,
   Copy,
+  CreditCard,
   Loader2,
   RefreshCcw,
   Send,
@@ -19,6 +21,27 @@ interface Message {
 interface SseEvent {
   event: string;
   data: any;
+}
+
+interface SaaSUser {
+  name: string;
+  enterprise: string;
+  integral: number;
+}
+
+interface SaaSTool {
+  name: string;
+  integral: number;
+}
+
+interface SaaSState {
+  userId: string | null;
+  toolId: string | null;
+  user: SaaSUser | null;
+  tool: SaaSTool | null;
+  initialized: boolean;
+  isVerifying: boolean;
+  insufficientPoints: boolean;
 }
 
 const buffettAvatarUrl =
@@ -151,6 +174,15 @@ export default function App() {
   const sessionIdRef = useRef(`buffett-${createId()}`);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const [saas, setSaas] = useState<SaaSState>({
+    userId: null,
+    toolId: null,
+    user: null,
+    tool: null,
+    initialized: false,
+    isVerifying: false,
+    insufficientPoints: false,
+  });
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
@@ -165,6 +197,66 @@ export default function App() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    const filterId = (id: any) => (id === "null" || id === "undefined" || !id ? null : String(id));
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type !== "SAAS_INIT") {
+        return;
+      }
+
+      const cleanUserId = filterId(event.data.userId);
+      const cleanToolId = filterId(event.data.toolId);
+      if (!cleanUserId || !cleanToolId) {
+        return;
+      }
+
+      setSaas((current) => ({
+        ...current,
+        userId: cleanUserId,
+        toolId: cleanToolId,
+        initialized: current.userId === cleanUserId && current.toolId === cleanToolId ? current.initialized : false,
+      }));
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
+  useEffect(() => {
+    const launchTool = async () => {
+      if (!saas.userId || !saas.toolId || saas.initialized) {
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/tool/launch", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userId: saas.userId,
+            toolId: saas.toolId,
+          }),
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (data?.success) {
+          setSaas((current) => ({
+            ...current,
+            user: data.data?.user || null,
+            tool: data.data?.tool || null,
+            initialized: true,
+          }));
+        }
+      } catch (err) {
+        console.error("SaaS Launch Failed:", err);
+      }
+    };
+
+    launchTool();
+  }, [saas.userId, saas.toolId, saas.initialized]);
+
+  useEffect(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
@@ -173,6 +265,75 @@ export default function App() {
 
   const updateAssistantMessage = (id: string, updater: (message: Message) => Message) => {
     setMessages((current) => current.map((message) => (message.id === id ? updater(message) : message)));
+  };
+
+  const verifySaasPoints = async () => {
+    if (!saas.userId || !saas.toolId) {
+      return true;
+    }
+
+    setSaas((current) => ({ ...current, isVerifying: true, insufficientPoints: false }));
+
+    try {
+      const response = await fetch("/api/tool/verify", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: saas.userId,
+          toolId: saas.toolId,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      const valid = Boolean(data?.success || data?.valid);
+
+      if (!valid) {
+        setSaas((current) => ({ ...current, insufficientPoints: true }));
+        setError("账户积分不足，无法继续对话。请充值或联系管理员。");
+      }
+
+      return valid;
+    } catch (err) {
+      console.error("SaaS Verify Error:", err);
+      return true;
+    } finally {
+      setSaas((current) => ({ ...current, isVerifying: false }));
+    }
+  };
+
+  const consumeSaasPoints = async () => {
+    if (!saas.userId || !saas.toolId) {
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/tool/consume", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: saas.userId,
+          toolId: saas.toolId,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (data?.success) {
+        setSaas((current) => ({
+          ...current,
+          user: current.user
+            ? {
+                ...current.user,
+                integral: data.data?.currentIntegral ?? current.user.integral,
+              }
+            : null,
+        }));
+      }
+    } catch (err) {
+      console.error("SaaS Consume Error:", err);
+    }
   };
 
   const handleSseEvent = (event: SseEvent, assistantId: string) => {
@@ -208,6 +369,11 @@ export default function App() {
       return;
     }
 
+    const canUseTool = await verifySaasPoints();
+    if (!canUseTool) {
+      return;
+    }
+
     setError("");
     setInput("");
 
@@ -232,6 +398,7 @@ export default function App() {
     abortRef.current = controller;
 
     try {
+      let shouldConsumePoints = false;
       const res = await fetch("/api/chat/stream", {
         method: "POST",
         headers: {
@@ -261,18 +428,28 @@ export default function App() {
         const events = parseSseFrames(decoder.decode(value, { stream: true }), bufferRef);
         for (const event of events) {
           handleSseEvent(event, assistantId);
+          if (event.event === "answer") {
+            shouldConsumePoints = true;
+          }
         }
       }
 
       const tailEvents = parseSseFrames(decoder.decode(), bufferRef);
       for (const event of tailEvents) {
         handleSseEvent(event, assistantId);
+        if (event.event === "answer") {
+          shouldConsumePoints = true;
+        }
       }
 
       updateAssistantMessage(assistantId, (message) => ({
         ...message,
         status: message.status === "error" ? "error" : "done",
       }));
+
+      if (shouldConsumePoints) {
+        await consumeSaasPoints();
+      }
     } catch (err: any) {
       if (err?.name !== "AbortError") {
         const message = err?.message || "请求失败，请稍后再试。";
@@ -333,21 +510,44 @@ export default function App() {
     <main className="flex h-screen items-center justify-center overflow-hidden bg-[#eef1f6] p-3 text-[#0f172a] sm:p-6">
       <section className="flex h-full min-h-0 w-full max-w-5xl flex-col overflow-hidden rounded-[12px] border border-[#d9dee8] bg-[#f5f6fa] shadow-[0_18px_55px_rgba(15,23,42,0.16)] sm:h-[88vh]">
         <header className="shrink-0 border-b border-[#e5e6eb] bg-white px-4 py-3 sm:px-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#eaf1ff] shadow-sm ring-1 ring-black/5">
-              <img
-                src={buffettAvatarUrl}
-                alt="巴菲特"
-                className="h-full w-full object-contain"
-                referrerPolicy="no-referrer"
-              />
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#eaf1ff] shadow-sm ring-1 ring-black/5">
+                <img
+                  src={buffettAvatarUrl}
+                  alt="巴菲特"
+                  className="h-full w-full object-contain"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+              <div className="min-w-0">
+                <h1 className="truncate text-[17px] font-semibold text-[#0f172a]">巴菲特 skill 助手</h1>
+                <p className="truncate text-sm text-[#667085]">用长期主义、能力圈和安全边际分析投资、商业与人生选择</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <h1 className="truncate text-[17px] font-semibold text-[#0f172a]">巴菲特 skill 助手</h1>
-              <p className="truncate text-sm text-[#667085]">用长期主义、能力圈和安全边际分析投资、商业与人生选择</p>
-            </div>
+            {saas.user && (
+              <div className="hidden shrink-0 items-center gap-3 rounded-[8px] border border-[#e5e6eb] bg-[#f8fafc] px-3 py-2 sm:flex">
+                <CreditCard className="h-4 w-4 text-[#2f66e8]" />
+                <div className="text-right">
+                  <p className="text-xs text-[#667085]">{saas.user.name}</p>
+                  <p className="text-sm font-semibold text-[#0f172a]">
+                    {saas.user.integral}
+                    <span className="ml-1 text-xs font-normal text-[#8a94a6]">
+                      积分 · 每次 -{saas.tool?.integral || 1}
+                    </span>
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </header>
+
+        {saas.insufficientPoints && (
+          <div className="flex items-center gap-2 border-b border-[#f2d6cf] bg-[#fff7f3] px-4 py-2 text-sm text-[#a34a34] sm:px-5">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>账户积分不足，无法继续对话。请充值或联系管理员。</span>
+          </div>
+        )}
 
         {error && (
           <div className="border-b border-[#f2d6cf] bg-[#fff7f3] px-6 py-2 text-sm text-[#a34a34]">
@@ -432,12 +632,12 @@ export default function App() {
               <button
                 type={isStreaming ? "button" : "submit"}
                 onClick={isStreaming ? stopStreaming : undefined}
-                disabled={!isStreaming && !input.trim()}
+                disabled={!isStreaming && (!input.trim() || saas.isVerifying)}
                 className="flex h-9 min-w-20 items-center justify-center gap-2 rounded-[8px] bg-[#2f66e8] px-4 text-sm font-semibold text-white transition hover:bg-[#2457d6] disabled:bg-[#b7c5df]"
                 title={isStreaming ? "停止" : "发送"}
               >
-                {isStreaming ? <RefreshCcw className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-                {isStreaming ? "停止" : "发送"}
+                {isStreaming || saas.isVerifying ? <RefreshCcw className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+                {isStreaming ? "停止" : saas.isVerifying ? "校验" : "发送"}
               </button>
             </div>
           </div>

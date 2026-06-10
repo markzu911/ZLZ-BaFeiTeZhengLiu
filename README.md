@@ -37,5 +37,10 @@
 - `POST /api/chat/stream`：SSE 流式对话
 - `POST /api/clear`：清空指定会话
 - `GET /api/config`：读取模型和密钥配置状态
+- `POST /api/tool/launch`：SaaS 平台工具初始化
+- `POST /api/tool/verify`：每次对话前校验积分
+- `POST /api/tool/consume`：模型成功回复后扣除本工具对应积分
 
 智谱请求在后端发送，前端不会携带密钥；请求体中已通过 `thinking.type = "disabled"` 在 API 层关闭深度思考。
+
+SaaS 积分流程与 `floorai---智能地板替换` 保持一致：页面接收平台 `SAAS_INIT` 消息拿到 `userId` 和 `toolId`，先 `launch` 获取用户与工具积分信息；发送对话前调用 `verify`，积分不足则阻止发送；收到模型最终回答后调用 `consume` 扣除对应积分。
