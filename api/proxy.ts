@@ -166,9 +166,6 @@ async function streamZhipuChat(params: {
       temperature: 0.72,
       top_p: 0.9,
       max_tokens: 4096,
-      thinking: {
-        type: "disabled",
-      },
     }),
   });
 

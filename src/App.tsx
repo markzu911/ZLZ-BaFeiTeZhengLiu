@@ -52,7 +52,7 @@ function MessageContent({ content }: { content: string }) {
   const lines = content.split(/\n/);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-1">
       {lines.map((line, index) => {
         const trimmed = line.trim();
 
@@ -63,8 +63,8 @@ function MessageContent({ content }: { content: string }) {
         if (/^[-*]\s+/.test(trimmed)) {
           return (
             <div key={index} className="flex gap-2">
-              <span className="mt-[0.72em] h-1.5 w-1.5 shrink-0 rounded-full bg-[#2f66e8]" />
-              <p className="min-w-0 leading-7">{splitBold(trimmed.replace(/^[-*]\s+/, ""))}</p>
+              <span className="mt-[0.66em] h-1.5 w-1.5 shrink-0 rounded-full bg-[#2f66e8]" />
+              <p className="min-w-0 leading-5">{splitBold(trimmed.replace(/^[-*]\s+/, ""))}</p>
             </div>
           );
         }
@@ -74,7 +74,7 @@ function MessageContent({ content }: { content: string }) {
           return (
             <div key={index} className="flex gap-2">
               <span className="shrink-0 font-semibold text-[#8a94a6]">{marker}</span>
-              <p className="min-w-0 leading-7">{splitBold(trimmed.replace(/^\d+[.、]\s+/, ""))}</p>
+              <p className="min-w-0 leading-5">{splitBold(trimmed.replace(/^\d+[.、]\s+/, ""))}</p>
             </div>
           );
         }
@@ -84,7 +84,7 @@ function MessageContent({ content }: { content: string }) {
         return (
           <p
             key={index}
-            className={`leading-7 ${isSection ? "border-l-[3px] border-[#2f66e8] pl-3 font-semibold" : ""}`}
+            className={`leading-5 ${isSection ? "border-l-[3px] border-[#2f66e8] pl-3 font-semibold" : ""}`}
           >
             {splitBold(trimmed)}
           </p>
@@ -356,7 +356,7 @@ export default function App() {
         )}
 
         <div ref={scrollRef} className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-5">
-          <div className="space-y-5">
+          <div className="space-y-4">
             {messages.map((message) => (
               <article
                 key={message.id}
@@ -364,7 +364,7 @@ export default function App() {
               >
                 {message.role === "assistant" && <BuffettAvatar />}
                   <div
-                    className={`max-w-[min(760px,calc(100%-56px))] rounded-[10px] border px-5 py-4 text-[15px] leading-7 sm:text-[16px] ${
+                    className={`relative w-fit max-w-[min(760px,calc(100%-56px))] rounded-[8px] border px-3 py-1.5 text-[15px] leading-5 sm:text-[16px] ${
                       message.role === "user"
                         ? "border-[#cfe0ff] bg-[#eaf1ff] text-[#0f172a]"
                         : message.status === "error"
@@ -377,11 +377,11 @@ export default function App() {
                     ) : (
                       <div className="flex items-center gap-2 text-[#657167]">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>思考中</span>
+                        <span>正在回复</span>
                       </div>
                     )}
                     {message.role === "assistant" && message.content && (
-                      <div className="mt-3 flex justify-end opacity-0 transition group-hover:opacity-100">
+                      <div className="absolute -right-9 top-1 opacity-0 transition group-hover:opacity-100">
                         <button
                           type="button"
                           onClick={() => copyMessage(message.content)}
@@ -405,7 +405,7 @@ export default function App() {
         </div>
 
         <form
-          className="shrink-0 border-t border-[#e5e6eb] bg-white px-4 py-4 sm:px-5"
+          className="shrink-0 border-t border-[#e5e6eb] bg-white px-4 py-2.5 sm:px-5"
           onSubmit={(event) => {
             event.preventDefault();
             sendMessage();
@@ -416,11 +416,11 @@ export default function App() {
               value={input}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={onKeyDown}
-              rows={3}
-              className="block max-h-40 min-h-24 w-full resize-none rounded-[10px] border-0 bg-white px-4 py-4 text-[15px] leading-6 text-[#0f172a] outline-none placeholder:text-[#9aa3b2]"
+              rows={1}
+              className="block max-h-28 min-h-11 w-full resize-none rounded-[10px] border-0 bg-white px-3 py-2 text-[15px] leading-5 text-[#0f172a] outline-none placeholder:text-[#9aa3b2]"
               placeholder="例如：怎么看一家公司是否值得长期持有？普通人怎么建立自己的能力圈？"
             />
-            <div className="flex items-center justify-between border-t border-[#eef0f4] px-4 py-3">
+            <div className="flex items-center justify-between border-t border-[#eef0f4] px-3 py-2">
               <button
                 type="button"
                 onClick={clearConversation}
@@ -433,7 +433,7 @@ export default function App() {
                 type={isStreaming ? "button" : "submit"}
                 onClick={isStreaming ? stopStreaming : undefined}
                 disabled={!isStreaming && !input.trim()}
-                className="flex h-10 min-w-24 items-center justify-center gap-2 rounded-[8px] bg-[#2f66e8] px-5 text-base font-semibold text-white transition hover:bg-[#2457d6] disabled:bg-[#b7c5df]"
+                className="flex h-9 min-w-20 items-center justify-center gap-2 rounded-[8px] bg-[#2f66e8] px-4 text-sm font-semibold text-white transition hover:bg-[#2457d6] disabled:bg-[#b7c5df]"
                 title={isStreaming ? "停止" : "发送"}
               >
                 {isStreaming ? <RefreshCcw className="h-4 w-4" /> : <Send className="h-4 w-4" />}
