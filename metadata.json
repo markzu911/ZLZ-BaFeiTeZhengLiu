@@ -1,0 +1,9 @@
+{
+  "name": "巴菲特视角对话",
+  "description": "基于巴菲特公开表达和价值投资框架的多轮流式对话应用。",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "Conversational AI",
+    "Streaming Responses"
+  ]
+}

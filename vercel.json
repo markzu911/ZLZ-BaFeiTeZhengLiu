@@ -1,0 +1,44 @@
+{
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors *"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/chat/stream",
+      "destination": "/api/proxy?route=chat-stream"
+    },
+    {
+      "source": "/api/clear",
+      "destination": "/api/proxy?route=clear"
+    },
+    {
+      "source": "/api/config",
+      "destination": "/api/proxy?route=config"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/proxy"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "functions": {
+    "api/proxy.ts": {
+      "maxDuration": 60
+    }
+  }
+}
