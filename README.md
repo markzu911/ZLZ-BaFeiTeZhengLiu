@@ -21,6 +21,7 @@
    ```text
    ZHIPU_API_KEY="你的智谱 API Key"
    ZHIPU_MODEL="glm-4.7-flash"
+   ZHIPU_MAX_TOKENS="1600"
    ```
 
 4. 启动：
@@ -36,3 +37,5 @@
 - `POST /api/chat/stream`：SSE 流式对话
 - `POST /api/clear`：清空指定会话
 - `GET /api/config`：读取模型和密钥配置状态
+
+智谱请求在后端发送，前端不会携带密钥；请求体中已通过 `thinking.type = "disabled"` 在 API 层关闭深度思考。

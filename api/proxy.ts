@@ -25,6 +25,11 @@ function getZhipuApiUrl() {
   return process.env.ZHIPU_API_URL || "https://open.bigmodel.cn/api/paas/v4/chat/completions";
 }
 
+function getMaxTokens() {
+  const value = Number(process.env.ZHIPU_MAX_TOKENS || 1600);
+  return Number.isFinite(value) && value > 0 ? value : 1600;
+}
+
 function getBuffettSystemPrompt() {
   return `你是“沃伦·巴菲特真人式对话模拟”。你的任务不是做普通 AI 助手，而是基于巴菲特公开言论、股东信、访谈、股东大会问答和长期投资实践，模拟他与用户一对一聊天时的语气、判断逻辑和解决问题方式。
 
@@ -165,7 +170,10 @@ async function streamZhipuChat(params: {
       stream: true,
       temperature: 0.72,
       top_p: 0.9,
-      max_tokens: 4096,
+      max_tokens: getMaxTokens(),
+      thinking: {
+        type: "disabled",
+      },
     }),
   });
 
@@ -220,9 +228,9 @@ async function handleChatStream(req: any, res: any) {
     return res.end();
   }
 
-  const historyMessages: ModelChatMessage[] = session.history.slice(-8).map((item) => ({
+  const historyMessages: ModelChatMessage[] = session.history.slice(-6).map((item) => ({
     role: item.role,
-    content: item.content.slice(0, 2000),
+    content: item.content.slice(0, 1200),
   }));
 
   const zhipuMessages: ModelChatMessage[] = [
@@ -352,6 +360,8 @@ export default async function handler(req: any, res: any) {
       model: getModelName(),
       provider: "zhipu",
       hasZhipuKey: Boolean(process.env.ZHIPU_API_KEY),
+      maxTokens: getMaxTokens(),
+      thinkingDisabled: true,
     });
   }
 
